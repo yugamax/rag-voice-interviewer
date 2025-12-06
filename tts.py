@@ -131,9 +131,12 @@ def tts_text_to_base64_wav(text: str) -> Optional[str]:
     last_error = None
     
     # If we have a known working client, try it first
+    tried_indices = set()
+    
     if _working_client_index is not None:
         i = _working_client_index
         client = clients[i]
+        tried_indices.add(i)
         try:
             print(f"[TTS] Using previously successful client {i + 1}/{len(clients)}...")
             tts_response = client.audio.speech.create(
@@ -155,13 +158,13 @@ def tts_text_to_base64_wav(text: str) -> Optional[str]:
         except Exception as e:
             last_error = e
             print(f"[TTS] ✗ Previously working client {i + 1} failed: {e}")
-            print(f"[TTS] Resetting and trying other clients...")
+            print(f"[TTS] Trying other clients...")
             _working_client_index = None
 
     # Try all clients to find a working one
     for i, client in enumerate(clients):
         # Skip the one we just tried
-        if i == _working_client_index:
+        if i in tried_indices:
             continue
             
         try:
