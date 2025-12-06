@@ -1,5 +1,6 @@
 import os
 from dotenv import load_dotenv
+import base64
 
 load_dotenv()
 
@@ -11,19 +12,20 @@ GOOGLE_CREDENTIALS_PATH = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
 # Service account JSON (full JSON string) - use in deployments where file upload isn't possible
 GOOGLE_CREDENTIALS_JSON = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")
 # Support base64-encoded JSON in env (useful for GitHub Secrets / CI)
-# GOOGLE_CREDENTIALS_JSON_B64 = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON_B64")
-# if not GOOGLE_CREDENTIALS_JSON and GOOGLE_CREDENTIALS_JSON_B64:
-#     try:
-#         import base64
-
-#         GOOGLE_CREDENTIALS_JSON = base64.b64decode(GOOGLE_CREDENTIALS_JSON_B64).decode("utf-8")
-#     except Exception:
-#         # leave as None on failure; firebase_client will handle fallback
-#         GOOGLE_CREDENTIALS_JSON = None
+GOOGLE_CREDENTIALS_JSON_B64 = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON_B64")
+if not GOOGLE_CREDENTIALS_JSON and GOOGLE_CREDENTIALS_JSON_B64:
+    try:
+        # some systems may include surrounding quotes; strip them
+        raw = GOOGLE_CREDENTIALS_JSON_B64.strip("\"'\n \r")
+        GOOGLE_CREDENTIALS_JSON = base64.b64decode(raw).decode("utf-8")
+    except Exception as e:
+        # leave as None on failure; firebase_client will handle fallback and log
+        print(f"[config] Failed to decode GOOGLE_APPLICATION_CREDENTIALS_JSON_B64: {e}")
+        GOOGLE_CREDENTIALS_JSON = None
 
 # Firestore collections (can override via env if you want)
-INTERVIEW_CONTEXT_COLLECTION = os.getenv("INTERVIEW_CONTEXT_COLLECTION", "interview_context")
-INTERVIEW_QUESTIONS_COLLECTION = os.getenv("INTERVIEW_QUESTIONS_COLLECTION", "interview_questions")
+# INTERVIEW_CONTEXT_COLLECTION = os.getenv("INTERVIEW_CONTEXT_COLLECTION", "interview_context")
+# INTERVIEW_QUESTIONS_COLLECTION = os.getenv("INTERVIEW_QUESTIONS_COLLECTION", "interview_questions")
 
 # LLM key (can override via GROQ_LLM_API_KEY env)
 GROQ_LLM_API_KEY = (
