@@ -199,7 +199,7 @@ Based on the candidate's answers, evaluate their performance across these dimens
 
 Provide:
 1. A numerical score from 0 to 100 (0=very poor, 100=excellent)
-2. A brief justification (2-4 sentences) explaining the score
+2. A brief justification (2-4 sentences) explaining the score; be candid and bluntly honest while staying professional and specific.
 
 Format your response EXACTLY as:
 SCORE: <number>

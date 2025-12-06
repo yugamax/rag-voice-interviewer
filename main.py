@@ -203,10 +203,10 @@ async def websocket_endpoint(websocket: WebSocket):
                         score_result = generate_final_score(chat_hist, questions)
                         score = score_result["score"]
                         justification = score_result["justification"]
-                        
+
                         print(f"[Interview] Final score: {score}/100")
                         print(f"[Interview] Justification: {justification}")
-                        
+
                         # Save to database
                         save_interview_score(
                             interview_id=interview_id,
@@ -215,9 +215,18 @@ async def websocket_endpoint(websocket: WebSocket):
                             justification=justification,
                         )
                         print(f"[Interview] Score saved to database")
+
+                        # Send final score to client before closing
+                        final_payload = {
+                            "type": "final_score",
+                            "score": score,
+                            "justification": justification,
+                            "interviewId": interview_id,
+                        }
+                        await websocket.send_text(json.dumps(final_payload))
                     except Exception as e:
                         print(f"[Interview] Error generating/saving score: {e}")
-                    
+
                     print(f"[Interview] Completed interview {interview_id} for user {user_id}")
                     await websocket.close()
                     break
