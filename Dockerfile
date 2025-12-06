@@ -32,7 +32,7 @@ RUN python -m pip install --upgrade pip setuptools wheel && \
 COPY . .
 
 # Expose port (must match your PORT env)
-EXPOSE ${PORT}
+EXPOSE 7860
 
-# Run the app
-CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT}"]
+# Use HF-provided PORT, fallback to 7860 just in case
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-7860}"]

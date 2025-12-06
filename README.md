@@ -3,7 +3,7 @@ title: Talking AI - RAG Interview Assistant
 emoji: 🤖
 colorFrom: purple
 colorTo: blue
-sdk: gradio
+sdk: docker
 sdk_version: 4.44.0
 app_file: main.py
 pinned: false
