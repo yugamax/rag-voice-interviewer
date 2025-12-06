@@ -182,18 +182,20 @@ async def websocket_endpoint(websocket: WebSocket):
                 audio_base64 = tts_text_to_base64_wav(res)
                 t1_tts = time.monotonic()
                 print(f"[TTS] Synthesis took {t1_tts - t0_tts:.2f}s")
-                if audio_base64 is None:
-                    await websocket.send_text(json.dumps({"text": "All TTS models unavailable."}))
-                    await websocket.close()
-                    return
-
+                
                 response_payload = {
                     "type": "llm_response",
                     "text": res,
-                    "audio_base64": audio_base64,
                     "interviewId": interview_id,
                     "questionIndex": current_q_index,
                 }
+                
+                if audio_base64 is None:
+                    print("[TTS] All TTS models failed, sending text-only response")
+                    response_payload["audio_base64"] = None
+                else:
+                    response_payload["audio_base64"] = audio_base64
+                
                 await websocket.send_text(json.dumps(response_payload))
 
                 # If that was the last question, generate and store final score

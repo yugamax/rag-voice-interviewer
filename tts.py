@@ -116,6 +116,7 @@ def tts_text_to_base64_wav(text: str) -> Optional[str]:
     """
     Use Groq TTS clients to convert text → base64 wav.
     Tries each configured API key in order. Returns None if all fail.
+    This function will continue trying all clients even if some fail.
     """
     if not clients:
         print("[TTS] No Groq API keys configured for TTS.")
@@ -125,7 +126,7 @@ def tts_text_to_base64_wav(text: str) -> Optional[str]:
 
     for i, client in enumerate(clients, start=1):
         try:
-            print(f"[TTS] Trying client {i}...")
+            print(f"[TTS] Trying client {i}/{len(clients)}...")
             tts_response = client.audio.speech.create(
                 model="playai-tts",
                 voice="Nia-PlayAI",
@@ -139,12 +140,14 @@ def tts_text_to_base64_wav(text: str) -> Optional[str]:
                 raise RuntimeError(f"TTS returned empty audio payload (type={type(tts_response)})")
 
             enc_aud = base64.b64encode(audio_data).decode("utf-8")
-            print(f"[TTS] Client {i} succeeded (response type: {type(tts_response)})")
+            print(f"[TTS] ✓ Client {i} succeeded (response type: {type(tts_response)})")
             return enc_aud
 
         except Exception as e:
             last_error = e
-            print(f"[TTS] Client {i} failed: {e}")
+            print(f"[TTS] ✗ Client {i} failed: {e}")
+            # Continue to next client instead of stopping
+            continue
 
-    print(f"[TTS] All TTS clients failed. Last error: {last_error}")
+    print(f"[TTS] All {len(clients)} TTS client(s) failed. Last error: {last_error}")
     return None
