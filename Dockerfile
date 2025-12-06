@@ -1,19 +1,21 @@
 # Python base image
+# Python base image
 FROM python:3.11-slim
 
 # Set workdir
 WORKDIR /app
 
-# System dependencies (if you hit errors with faiss or sentence-transformers, you can add more libs)
+# Non-interactive apt and minimal system deps. Conservative set: keep build tools
+# and OpenBLAS so numerical libs (faiss, sentence-transformers) install reliably.
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     git \
     wget \
-    ffmpeg \
-    libsndfile1 \
     libopenblas-dev \
-    liblapack-dev \
-    libblas-dev \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 

@@ -24,8 +24,8 @@ if not GOOGLE_CREDENTIALS_JSON and GOOGLE_CREDENTIALS_JSON_B64:
         GOOGLE_CREDENTIALS_JSON = None
 
 # Firestore collections (can override via env if you want)
-# INTERVIEW_CONTEXT_COLLECTION = os.getenv("INTERVIEW_CONTEXT_COLLECTION", "interview_context")
-# INTERVIEW_QUESTIONS_COLLECTION = os.getenv("INTERVIEW_QUESTIONS_COLLECTION", "interview_questions")
+INTERVIEW_CONTEXT_COLLECTION = os.getenv("INTERVIEW_CONTEXT_COLLECTION", "interview_context")
+INTERVIEW_QUESTIONS_COLLECTION = os.getenv("INTERVIEW_QUESTIONS_COLLECTION", "interview_questions")
 
 # LLM key (can override via GROQ_LLM_API_KEY env)
 GROQ_LLM_API_KEY = (
