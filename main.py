@@ -13,8 +13,8 @@ from groq import Groq
 from firebase_admin import auth as firebase_auth
 
 from config import NON_EMPTY_GROQ_KEYS
-from firebase_client import load_interview_questions, save_user_response
-from rag import generate_interviewer_reply
+from firebase_client import load_interview_questions, save_user_response, save_interview_score
+from rag import generate_interviewer_reply, generate_final_score
 from tts import tts_text_to_base64_wav
 
 # ---- Groq client for STT (Whisper) ----
@@ -196,8 +196,28 @@ async def websocket_endpoint(websocket: WebSocket):
                 }
                 await websocket.send_text(json.dumps(response_payload))
 
-                # If that was the last question, end the interview & close socket
+                # If that was the last question, generate and store final score
                 if next_question is None:
+                    try:
+                        print(f"[Interview] Generating final score for interview {interview_id}")
+                        score_result = generate_final_score(chat_hist, questions)
+                        score = score_result["score"]
+                        justification = score_result["justification"]
+                        
+                        print(f"[Interview] Final score: {score}/100")
+                        print(f"[Interview] Justification: {justification}")
+                        
+                        # Save to database
+                        save_interview_score(
+                            interview_id=interview_id,
+                            user_id=user_id,
+                            score=score,
+                            justification=justification,
+                        )
+                        print(f"[Interview] Score saved to database")
+                    except Exception as e:
+                        print(f"[Interview] Error generating/saving score: {e}")
+                    
                     print(f"[Interview] Completed interview {interview_id} for user {user_id}")
                     await websocket.close()
                     break

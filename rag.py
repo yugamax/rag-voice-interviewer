@@ -161,3 +161,86 @@ def generate_interviewer_reply(
             print(f"[RAG] LLM client {i} failed: {exc}")
 
     raise RuntimeError(f"All Groq LLM keys failed. Last error: {last_error}")
+
+
+def generate_final_score(chat_hist: List[Dict[str, str]], questions: List[str]) -> Dict[str, Any]:
+    """
+    Use LLM to evaluate the entire interview and generate a final score (0-100) with justification.
+    
+    Args:
+        chat_hist: Full conversation history including all Q&A pairs
+        questions: List of all interview questions that were asked
+    
+    Returns:
+        Dict with 'score' (int 0-100) and 'justification' (str)
+    """
+    history_str = format_history(chat_hist)
+    questions_str = "\n".join(f"{i+1}. {q}" for i, q in enumerate(questions))
+    
+    scoring_prompt = f"""
+You are an expert interviewer evaluating a candidate's interview performance.
+
+Below are the questions asked and the full conversation history:
+
+<questions>
+{questions_str}
+</questions>
+
+<conversation>
+{history_str}
+</conversation>
+
+Based on the candidate's answers, evaluate their performance across these dimensions:
+- Technical knowledge and accuracy
+- Communication clarity and professionalism
+- Problem-solving approach
+- Depth of understanding
+- Relevance and completeness of answers
+
+Provide:
+1. A numerical score from 0 to 100 (0=very poor, 100=excellent)
+2. A brief justification (2-4 sentences) explaining the score
+
+Format your response EXACTLY as:
+SCORE: <number>
+JUSTIFICATION: <text>
+"""
+    
+    last_error: Optional[Exception] = None
+    for i, client in enumerate(llm_clients, start=1):
+        try:
+            ai_msg = client.invoke(scoring_prompt)
+            response = getattr(ai_msg, "content", str(ai_msg)).strip()
+            
+            # Parse the response
+            score_line = ""
+            justification_line = ""
+            for line in response.split("\n"):
+                if line.startswith("SCORE:"):
+                    score_line = line.replace("SCORE:", "").strip()
+                elif line.startswith("JUSTIFICATION:"):
+                    justification_line = line.replace("JUSTIFICATION:", "").strip()
+            
+            # Extract score number
+            try:
+                score = int(score_line)
+                if not (0 <= score <= 100):
+                    score = max(0, min(100, score))  # Clamp to valid range
+            except (ValueError, TypeError):
+                # If parsing fails, try to extract first number from response
+                import re
+                numbers = re.findall(r'\b\d+\b', response)
+                score = int(numbers[0]) if numbers else 50  # Default to 50 if no number found
+            
+            justification = justification_line if justification_line else response
+            
+            return {
+                "score": score,
+                "justification": justification,
+            }
+            
+        except Exception as exc:  # pragma: no cover - external service
+            last_error = exc
+            print(f"[RAG] Scoring LLM client {i} failed: {exc}")
+    
+    raise RuntimeError(f"All Groq LLM keys failed during scoring. Last error: {last_error}")

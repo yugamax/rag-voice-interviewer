@@ -125,3 +125,31 @@ def save_user_response(
         print(f"[Interview] Saved response for interview={interview_id}, q_index={question_index}")
     except Exception as e:
         print(f"[Interview] Error saving response: {e}")
+
+
+def save_interview_score(
+    interview_id: str,
+    user_id: str,
+    score: int,
+    justification: str,
+):
+    """
+    Store the final interview score in Firestore.
+    Saved to: interviews/{interviewId}
+    """
+    try:
+        doc_ref = db.collection("interviews").document(interview_id)
+        server_ts = getattr(firestore, "SERVER_TIMESTAMP", None)
+        doc_ref.set(
+            {
+                "interviewId": interview_id,
+                "userId": user_id,
+                "score": score,
+                "justification": justification,
+                "completedAt": server_ts,
+            },
+            merge=True  # Merge with existing document if any metadata already exists
+        )
+        print(f"[Interview] Saved final score {score}/100 for interview={interview_id}")
+    except Exception as e:
+        print(f"[Interview] Error saving score: {e}")
