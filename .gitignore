@@ -95,3 +95,4 @@ htmlcov/
 .pytest_cache/
 ai-interview-68b1a-firebase-adminsdk-fbsvc-3ecc1eae56.json
 README.md
+seed_interview_questions.py
