@@ -1,0 +1,25 @@
+# Web framework
+fastapi
+uvicorn[standard]
+
+# Groq client
+groq
+
+# Env
+python-dotenv
+
+# Firebase
+firebase-admin
+
+# LangChain core + Groq
+langchain-core
+langchain-community
+langchain-groq
+
+# Embeddings & vector store
+sentence-transformers==3.2.1
+faiss-cpu
+
+# Typing / utils
+pydantic
+typing-extensions

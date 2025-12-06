@@ -1,0 +1,97 @@
+# =========================
+# ENVIRONMENT FILES
+# =========================
+.env
+.env.*
+*.env
+
+# =========================
+# PYTHON CACHE / BUILD
+# =========================
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.so
+
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# =========================
+# VIRTUAL ENVIRONMENTS
+# =========================
+venv/
+.venv/
+env/
+ENV/
+
+# =========================
+# IDE / EDITORS
+# =========================
+.vscode/
+.idea/
+*.iml
+*.swp
+*.swo
+
+# =========================
+# OS FILES
+# =========================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# =========================
+# FIREBASE / GOOGLE SECRETS
+# =========================
+*-service-account.json
+firebase-adminsdk-*.json
+
+# =========================
+# LOGS
+# =========================
+*.log
+logs/
+
+# =========================
+# RAG / VECTOR DATA
+# =========================
+*.faiss
+*.pkl
+*.pickle
+*.index
+
+# =========================
+# AUDIO / TEMP FILES
+# =========================
+*.wav
+*.mp3
+*.m4a
+*.tmp
+/tmp
+temp/
+
+# =========================
+# NODE (IF YOU HAVE A FRONTEND)
+# =========================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# =========================
+# JUPYTER / DATA SCIENCE
+# =========================
+.ipynb_checkpoints/
+
+# =========================
+# COVERAGE / TESTS
+# =========================
+.coverage
+test.html
+htmlcov/
+.pytest_cache/
+ai-interview-68b1a-firebase-adminsdk-fbsvc-3ecc1eae56.json
+README.md
