@@ -111,22 +111,31 @@ if Groq is not None:
 
 print(f"[TTS] Initialized {len(clients)} TTS client(s).")
 
+# Track which client is working in the current session
+_working_client_index: Optional[int] = None
+
 
 def tts_text_to_base64_wav(text: str) -> Optional[str]:
     """
     Use Groq TTS clients to convert text → base64 wav.
-    Tries each configured API key in order. Returns None if all fail.
-    This function will continue trying all clients even if some fail.
+    Once a client succeeds, it will be used for subsequent calls in the session.
+    If the working client fails, it will try the remaining clients.
+    Returns None if all fail.
     """
+    global _working_client_index
+    
     if not clients:
         print("[TTS] No Groq API keys configured for TTS.")
         return None
 
     last_error = None
-
-    for i, client in enumerate(clients, start=1):
+    
+    # If we have a known working client, try it first
+    if _working_client_index is not None:
+        i = _working_client_index
+        client = clients[i]
         try:
-            print(f"[TTS] Trying client {i}/{len(clients)}...")
+            print(f"[TTS] Using previously successful client {i + 1}/{len(clients)}...")
             tts_response = client.audio.speech.create(
                 model="playai-tts",
                 voice="Nia-PlayAI",
@@ -140,12 +149,44 @@ def tts_text_to_base64_wav(text: str) -> Optional[str]:
                 raise RuntimeError(f"TTS returned empty audio payload (type={type(tts_response)})")
 
             enc_aud = base64.b64encode(audio_data).decode("utf-8")
-            print(f"[TTS] ✓ Client {i} succeeded (response type: {type(tts_response)})")
+            print(f"[TTS] ✓ Client {i + 1} succeeded (response type: {type(tts_response)})")
             return enc_aud
 
         except Exception as e:
             last_error = e
-            print(f"[TTS] ✗ Client {i} failed: {e}")
+            print(f"[TTS] ✗ Previously working client {i + 1} failed: {e}")
+            print(f"[TTS] Resetting and trying other clients...")
+            _working_client_index = None
+
+    # Try all clients to find a working one
+    for i, client in enumerate(clients):
+        # Skip the one we just tried
+        if i == _working_client_index:
+            continue
+            
+        try:
+            print(f"[TTS] Trying client {i + 1}/{len(clients)}...")
+            tts_response = client.audio.speech.create(
+                model="playai-tts",
+                voice="Nia-PlayAI",
+                response_format="wav",
+                input=text,
+            )
+
+            audio_data = _extract_bytes(tts_response)
+
+            if not audio_data:
+                raise RuntimeError(f"TTS returned empty audio payload (type={type(tts_response)})")
+
+            enc_aud = base64.b64encode(audio_data).decode("utf-8")
+            print(f"[TTS] ✓ Client {i + 1} succeeded (response type: {type(tts_response)})")
+            # Remember this working client for future calls
+            _working_client_index = i
+            return enc_aud
+
+        except Exception as e:
+            last_error = e
+            print(f"[TTS] ✗ Client {i + 1} failed: {e}")
             # Continue to next client instead of stopping
             continue
 
