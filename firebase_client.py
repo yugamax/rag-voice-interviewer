@@ -132,24 +132,37 @@ def save_interview_score(
     user_id: str,
     score: int,
     justification: str,
-):
+) -> int:
     """
     Store the final interview score in Firestore.
     Saved to: interviews/{interviewId}
+    Also increments the attempt count for this user on this interview.
+    Returns the attempt count.
     """
     try:
         doc_ref = db.collection("interviews").document(interview_id)
         server_ts = getattr(firestore, "SERVER_TIMESTAMP", None)
+        
+        # Get current attempt count (if any)
+        existing_doc = doc_ref.get()
+        attempt_count = 1
+        if existing_doc.exists:
+            data = existing_doc.to_dict() or {}
+            attempt_count = (data.get("attempt_count", 0) or 0) + 1
+        
         doc_ref.set(
             {
                 "interviewId": interview_id,
                 "userId": user_id,
                 "score": score,
                 "justification": justification,
+                "attempt_count": attempt_count,
                 "completedAt": server_ts,
             },
             merge=True  # Merge with existing document if any metadata already exists
         )
-        print(f"[Interview] Saved final score {score}/100 for interview={interview_id}")
+        print(f"[Interview] Saved final score {score}/100 for interview={interview_id} (attempt #{attempt_count})")
+        return attempt_count
     except Exception as e:
         print(f"[Interview] Error saving score: {e}")
+        return 1

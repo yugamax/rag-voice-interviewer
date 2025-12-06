@@ -103,10 +103,6 @@ async def websocket_endpoint(websocket: WebSocket):
     chat_hist.append({"role": "assistant", "content": intro_text})
 
     try:
-        # Simple audio-file receive loop: client sends a complete audio blob via
-        # `websocket.send(arrayBuffer)` (received here as bytes). For each audio
-        # message we transcribe, run the LLM reply generator, convert to TTS,
-        # and return the audio+text payload to the client.
         while True:
             try:
                 audio_bytes = await websocket.receive_bytes()
@@ -166,7 +162,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 next_question = None
 
             try:
-                print(f"[WS] Got transcript for user {user_id}: {user_text}")
+                # print(f"[WS] Got transcript for user {user_id}: {user_text}")
                 t0_llm = time.monotonic()
                 res = generate_interviewer_reply(
                     user_answer=user_text,
@@ -206,17 +202,17 @@ async def websocket_endpoint(websocket: WebSocket):
                         score = score_result["score"]
                         justification = score_result["justification"]
 
-                        print(f"[Interview] Final score: {score}/100")
-                        print(f"[Interview] Justification: {justification}")
+                        # print(f"[Interview] Final score: {score}/100")
+                        # print(f"[Interview] Justification: {justification}")
 
                         # Save to database
-                        save_interview_score(
+                        attempt_count = save_interview_score(
                             interview_id=interview_id,
                             user_id=user_id,
                             score=score,
                             justification=justification,
                         )
-                        print(f"[Interview] Score saved to database")
+                        # print(f"[Interview] Score saved to database")
 
                         # Send final score to client before closing
                         final_payload = {
@@ -224,6 +220,7 @@ async def websocket_endpoint(websocket: WebSocket):
                             "score": score,
                             "justification": justification,
                             "interviewId": interview_id,
+                            "attempt_count": attempt_count,
                         }
                         await websocket.send_text(json.dumps(final_payload))
                     except Exception as e:
@@ -249,5 +246,5 @@ async def websocket_endpoint(websocket: WebSocket):
 
 
 # if __name__ == "__main__":
-#     port = int(os.environ.get("PORT", 8000))
-#     uvicorn.run("main:app", host="0.0.0.0", port=port)
+#     port = int(os.environ.get("PORT", 7860))
+#     uvicorn.run("main:app", host="127.0.0.1", port=port)
