@@ -21,7 +21,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Avoid pulling TensorFlow when using Transformers with PyTorch
 ENV TRANSFORMERS_NO_TF=1
-ENV PORT=8000
+ENV PORT=7860
 
 # Copy requirement file and install (upgrade pip first)
 COPY requirements.txt .
