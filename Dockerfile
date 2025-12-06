@@ -34,5 +34,6 @@ COPY . .
 # Expose port (must match your PORT env)
 EXPOSE 7860
 
+
 # Use HF-provided PORT, fallback to 7860 just in case
 CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-7860}"]

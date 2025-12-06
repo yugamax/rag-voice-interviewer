@@ -11,7 +11,7 @@ pinned: false
 
 # 🗣️ Talking AI – RAG Based Interview Assistant
 
-Talking AI is a Retrieval-Augmented Generation (RAG) based interview assistant that can answer questions based on custom knowledge sources using LLMs.
+Smart Talking AI is a Retrieval-Augmented Generation (RAG) based interview assistant that can answer questions based on custom knowledge sources using LLMs.
 
 ## 🚀 Features
 - Context-aware question answering
