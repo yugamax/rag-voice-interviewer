@@ -103,22 +103,31 @@ def clean_filler_sounds(text: str) -> str:
     """Remove filler sounds and interjections from AI response."""
     import re
     
-    # List of filler sounds to remove (case-insensitive)
+    # Remove all variations of filler sounds (aggressive cleaning)
     fillers = [
-        r'\buhm\b', r'\buh\b', r'\bum\b', r'\bumm\b',
-        r'\bah\b', r'\bahh\b', r'\bahhh\b',
-        r'\berr\b', r'\berrr\b',
-        r'\bhm\b', r'\bhmm\b', r'\bhmmm\b',
-        r'\bliek\b',  # common in speech synthesis
-        r'[,\s]*(like|you know|I mean|basically|honestly|literally)[,\s]*(?=\s)',
+        # Umm/um/uh variants
+        r'\b[u]([hmm]{1,})\b',  # um, umm, ummm, uh, uhh, etc.
+        # Ah/uh variants
+        r'\b[a]([hh]{1,})\b',   # ah, ahh, ahhh, etc.
+        # Hmm/hm variants
+        r'\b[h]([mm]{1,})\b',   # hm, hmm, hmmm, etc.
+        # Err/errr variants
+        r'\b[e]([rr]{1,})\b',   # er, err, errr, etc.
+        # Like interjections
+        r'\b(like|you\s+know|i\s+mean|basically|honestly|literally|actually|well|so)\b',
+        # Trailing punctuation with fillers
+        r',\s*(?=\b(?:like|um|uh|ah|hmm)\b)',
     ]
     
     result = text
     for filler in fillers:
         result = re.sub(filler, '', result, flags=re.IGNORECASE)
     
-    # Clean up multiple spaces that result from removals
-    result = re.sub(r'\s+', ' ', result).strip()
+    # Clean up multiple spaces, commas, and punctuation that result from removals
+    result = re.sub(r'\s+', ' ', result)  # Multiple spaces → single space
+    result = re.sub(r',\s*,', ',', result)  # Double commas
+    result = re.sub(r'\s+([,.])', r'\1', result)  # Space before punctuation
+    result = re.sub(r'^\s+|\s+$', '', result)  # Leading/trailing whitespace
     
     return result
 
@@ -170,7 +179,8 @@ INTERVIEWER_PROMPT_TEMPLATE = """
 You are a professional AI interviewer conducting a live job interview. Your tone must be formal, polite, calm, and encouraging — not robotic or harsh.
 
 You must strictly follow these rules:
-- important: Don't laugh, or make sounds or say "uhm", "ah", etc.
+- CRITICAL: NEVER use filler sounds or interjections. Do NOT say or write: "umm", "um", "uh", "ah", "hmm", "like", "you know", "I mean", "basically", "honestly", "literally", "actually", "well", "err", or similar.
+- Never laugh or make vocal sounds.
 - You are in the middle of an interview.
 - Never say the candidate's name.
 - After each candidate answer, provide a VERY short, balanced review (1–3 sentences, max 40 words) with this weighting:
@@ -313,6 +323,7 @@ IMPORTANT INSTRUCTIONS:
 - If some questions lack detailed audio metrics, focus your evaluation on the questions where metrics ARE available and the overall conversation quality.
 - DO NOT mention "lack of audio metrics" or "incomplete metrics" in your justification.
 - Use natural, conversational language - avoid technical metric terms.
+- CRITICAL: NEVER use filler sounds like "umm", "um", "uh", "ah", "hmm", "like", "you know", "I mean", "basically", "honestly", "literally", "actually", "well", "err", or similar words in your response.
 
 Provide:
 1. A numerical score from 0 to 100 (0=very poor, 100=excellent)
