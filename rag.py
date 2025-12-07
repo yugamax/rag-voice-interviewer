@@ -99,6 +99,30 @@ def format_history(chat_hist: List[Dict[str, str]]) -> str:
     return "\n".join(lines)
 
 
+def clean_filler_sounds(text: str) -> str:
+    """Remove filler sounds and interjections from AI response."""
+    import re
+    
+    # List of filler sounds to remove (case-insensitive)
+    fillers = [
+        r'\buhm\b', r'\buh\b', r'\bum\b', r'\bumm\b',
+        r'\bah\b', r'\bahh\b', r'\bahhh\b',
+        r'\berr\b', r'\berrr\b',
+        r'\bhm\b', r'\bhmm\b', r'\bhmmm\b',
+        r'\bliek\b',  # common in speech synthesis
+        r'[,\s]*(like|you know|I mean|basically|honestly|literally)[,\s]*(?=\s)',
+    ]
+    
+    result = text
+    for filler in fillers:
+        result = re.sub(filler, '', result, flags=re.IGNORECASE)
+    
+    # Clean up multiple spaces that result from removals
+    result = re.sub(r'\s+', ' ', result).strip()
+    
+    return result
+
+
 def format_metrics(metrics: Optional[Dict[str, Any]]) -> str:
     if not metrics:
         return "Audio analysis not available for this response."
@@ -228,7 +252,10 @@ def generate_interviewer_reply(
     for i, client in enumerate(llm_clients, start=1):
         try:
             ai_msg = client.invoke(prompt)
-            return getattr(ai_msg, "content", str(ai_msg)).strip()
+            response_text = getattr(ai_msg, "content", str(ai_msg)).strip()
+            # Clean up filler sounds from the response
+            cleaned_text = clean_filler_sounds(response_text)
+            return cleaned_text
         except Exception as exc:  # pragma: no cover - external service
             last_error = exc
             print(f"[RAG] LLM client {i} failed: {exc}")
@@ -322,7 +349,9 @@ JUSTIFICATION: <text>
                 numbers = re.findall(r'\b\d+\b', response)
                 score = int(numbers[0]) if numbers else 50  # Default to 50 if no number found
             
+            # Clean up filler sounds from justification
             justification = justification_line if justification_line else response
+            justification = clean_filler_sounds(justification)
             
             return {
                 "score": score,
