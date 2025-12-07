@@ -86,6 +86,21 @@ async def websocket_endpoint(websocket: WebSocket):
         await websocket.close()
         return
 
+    # Build interview-specific vectorstore for RAG context
+    from rag import build_vectorstore_from_firestore
+    try:
+        print(f"[Interview] Building RAG vectorstore for interview {interview_id}")
+        interview_vectorstore = build_vectorstore_from_firestore(interview_id)
+        if interview_vectorstore:
+            interview_retriever = interview_vectorstore.as_retriever(search_kwargs={"k": 4})
+            print(f"[Interview] RAG vectorstore ready for {interview_id}")
+        else:
+            interview_retriever = None
+            print(f"[Interview] No RAG context found for {interview_id}")
+    except Exception as e:
+        print(f"[Interview] Error building vectorstore: {e}")
+        interview_retriever = None
+
     current_q_index = 0
 
     # Chat history for LLM context
@@ -232,6 +247,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     current_question=current_question_text,
                     next_question=next_question,
                     metrics=merged_metrics,
+                    retriever=interview_retriever,
                 )
                 t1_llm = time.monotonic()
                 print(f"[WS] LLM produced response (took {t1_llm - t0_llm:.2f}s): {res[:200]}")

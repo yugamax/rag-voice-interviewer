@@ -21,16 +21,28 @@ embedding_model = HuggingFaceEmbeddings(
 )
 
 
-def build_vectorstore_from_firestore() -> Optional[FAISS]:
+def build_vectorstore_from_firestore(interview_id: Optional[str] = None) -> Optional[FAISS]:
     """
     Pulls documents from Firestore and builds a FAISS vector store.
+    If interview_id is provided, filters to that interview's context only.
+    Falls back to all context docs if no interview_id.
     Expects each document to have a 'content' (or 'text') field.
     """
     collection_ref = db.collection(INTERVIEW_CONTEXT_COLLECTION)
     texts: List[str] = []
     metadatas: List[Dict[str, Any]] = []
 
-    for doc_snap in collection_ref.stream():
+    if interview_id:
+        # Filter by interview_id
+        query = collection_ref.where("interviewId", "==", interview_id)
+        docs_to_process = list(query.stream())
+        print(f"[RAG] Loading context for interview {interview_id}...")
+    else:
+        # Load all (fallback)
+        docs_to_process = list(collection_ref.stream())
+        print(f"[RAG] Loading all context (no interview_id filter)...")
+
+    for doc_snap in docs_to_process:
         data = doc_snap.to_dict() or {}
         content = data.get("content") or data.get("text")
         if not content:
@@ -43,10 +55,10 @@ def build_vectorstore_from_firestore() -> Optional[FAISS]:
         metadatas.append(meta)
 
     if not texts:
-        print("[RAG] No documents found in Firestore collection:", INTERVIEW_CONTEXT_COLLECTION)
+        print(f"[RAG] No documents found for interview {interview_id or 'all'} in collection: {INTERVIEW_CONTEXT_COLLECTION}")
         return None
 
-    print(f"[RAG] Loaded {len(texts)} docs from Firestore.")
+    print(f"[RAG] Loaded {len(texts)} context docs for interview {interview_id or 'all'}.")
     vectorstore = FAISS.from_texts(
         texts=texts,
         embedding=embedding_model,
@@ -54,9 +66,9 @@ def build_vectorstore_from_firestore() -> Optional[FAISS]:
     )
     return vectorstore
 
-
-vectorstore = build_vectorstore_from_firestore()
-retriever = vectorstore.as_retriever(search_kwargs={"k": 4}) if vectorstore is not None else None
+# Vectorstore will be built per-interview in the websocket endpoint
+vectorstore = None
+retriever = None
 
 # ---- LLM with key failover (uses NON_EMPTY_GROQ_KEYS only) ----
 
@@ -185,6 +197,7 @@ def generate_interviewer_reply(
     current_question: str,
     next_question: Optional[str],
     metrics: Optional[Dict[str, Any]] = None,
+    retriever: Optional[Any] = None,
 ) -> str:
     """Use LangChain + Groq + Firestore-backed RAG to review the answer and ask next question / end interview."""
     history_str = format_history(chat_hist)
@@ -193,9 +206,13 @@ def generate_interviewer_reply(
     # Build RAG context from current question + answer
     context_text = ""
     if retriever is not None:
-        query = f"{current_question}\n{user_answer}"
-        docs = retriever.invoke(query)
-        context_text = "\n\n".join(d.page_content for d in docs)
+        try:
+            query = f"{current_question}\n{user_answer}"
+            docs = retriever.invoke(query)
+            context_text = "\n\n".join(d.page_content for d in docs)
+        except Exception as e:
+            print(f"[RAG] Error retrieving context: {e}")
+            context_text = ""
 
     prompt = INTERVIEWER_PROMPT_TEMPLATE.format(
         context=context_text,
