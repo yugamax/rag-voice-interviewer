@@ -98,25 +98,17 @@ def format_history(chat_hist: List[Dict[str, str]]) -> str:
             lines.append(f"Interviewer: {content}")
     return "\n".join(lines)
 
-
 def clean_filler_sounds(text: str) -> str:
     """Remove filler sounds and interjections from AI response."""
     import re
     
-    # Remove all variations of filler sounds (aggressive cleaning)
+    # Remove only exact filler sounds and common interjections
+    # Be conservative to avoid removing legitimate words
     fillers = [
-        # Umm/um/uh variants
-        r'\b[u]([hmm]{1,})\b',  # um, umm, ummm, uh, uhh, etc.
-        # Ah/uh variants
-        r'\b[a]([hh]{1,})\b',   # ah, ahh, ahhh, etc.
-        # Hmm/hm variants
-        r'\b[h]([mm]{1,})\b',   # hm, hmm, hmmm, etc.
-        # Err/errr variants
-        r'\b[e]([rr]{1,})\b',   # er, err, errr, etc.
-        # Like interjections
-        r'\b(like|you\s+know|i\s+mean|basically|honestly|literally|actually|well|so)\b',
+        # Exact filler sounds as whole words
+        r'\b(um|umm|ummm|uh|uhh|uhhh|ah|ahh|ahhh|hmm|hm|err|errr|er)\b',
         # Trailing punctuation with fillers
-        r',\s*(?=\b(?:like|um|uh|ah|hmm)\b)',
+        r',\s*(?=\b(?:um|uh|ah|hmm|err)\b)',
     ]
     
     result = text
@@ -265,6 +257,8 @@ def generate_interviewer_reply(
             response_text = getattr(ai_msg, "content", str(ai_msg)).strip()
             # Clean up filler sounds from the response
             cleaned_text = clean_filler_sounds(response_text)
+            # print(f"[RAG] Response before cleaning: {response_text[:150]}")
+            # print(f"[RAG] Response after cleaning: {cleaned_text[:150]}")
             return cleaned_text
         except Exception as exc:  # pragma: no cover - external service
             last_error = exc
