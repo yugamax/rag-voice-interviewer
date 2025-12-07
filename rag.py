@@ -87,18 +87,67 @@ def format_history(chat_hist: List[Dict[str, str]]) -> str:
     return "\n".join(lines)
 
 
+def format_metrics(metrics: Optional[Dict[str, Any]]) -> str:
+    if not metrics:
+        return "Audio analysis not available for this response."
+    
+    parts = []
+    speech_dur = metrics.get('speechDuration')
+    total_dur = metrics.get('totalDuration')
+    silence_ratio = metrics.get('silenceRatio')
+    pause_count = metrics.get('pauseCount')
+    start_latency = metrics.get('startLatency')
+    
+    if speech_dur and total_dur:
+        parts.append(f"spoke for {speech_dur}s out of {total_dur}s total recording")
+    
+    if silence_ratio is not None:
+        if silence_ratio < 0.2:
+            parts.append("very fluent with minimal pauses")
+        elif silence_ratio < 0.4:
+            parts.append("good fluency with some natural pauses")
+        elif silence_ratio < 0.6:
+            parts.append("moderate pauses during speech")
+        else:
+            parts.append("significant pauses or hesitation")
+    
+    if pause_count is not None:
+        if pause_count == 0:
+            parts.append("no noticeable breaks")
+        elif pause_count <= 2:
+            parts.append(f"{pause_count} brief pause(s)")
+        else:
+            parts.append(f"{pause_count} pauses detected")
+    
+    if start_latency is not None:
+        if start_latency < 1:
+            parts.append("responded immediately")
+        elif start_latency < 3:
+            parts.append(f"started speaking after {start_latency:.1f}s")
+        else:
+            parts.append(f"took {start_latency:.1f}s to begin response")
+    
+    return "; ".join(parts) if parts else "Audio captured successfully"
+
+
 INTERVIEWER_PROMPT_TEMPLATE = """
 You are a professional AI interviewer conducting a live job interview. Your tone must be formal, polite, calm, and encouraging — not robotic or harsh.
 
 You must strictly follow these rules:
-- Don't laugh, or make sounds or say "uhm", "ah", etc.
+- important: Don't laugh, or make sounds or say "uhm", "ah", etc.
 - You are in the middle of an interview.
 - Never say the candidate's name.
-- After each candidate answer, first give a VERY short, balanced, and professional review of the answer (1–3 sentences, max 40 words). 
-  The feedback should be constructive, supportive, and never overly harsh.
+- After each candidate answer, provide a VERY short, balanced review (1–3 sentences, max 40 words) with this weighting:
+  - 60% focus on DELIVERY METRICS: speaking pace, clarity, confidence, pauses, fluency, and response time
+  - 40% focus on CONTENT: relevance and completeness of the answer
+  The feedback should be constructive and supportive, highlighting both delivery quality and content.
 - Then, if there is a next question, ask it in a natural, conversational way (do NOT label it as Question 1, Question 2, etc.).
-  Use phrasing like: “My next question is…”, “Let’s move on to…”, or “I’d like to ask you about…”.
-- Important: If there is NO next question (this is the last one), instead give a brief overall review of the candidate's performance (max 80 words) and then say something like:
+  Use phrasing like: "My next question is…", "Let's move on to…", or "I'd like to ask you about…".
+- Important: If there is NO next question (this is the last one), instead give a comprehensive overall review of the candidate's performance (50-60 words) with this emphasis:
+  - 60% on delivery: Discuss their overall communication clarity, speaking confidence, response timing, pacing consistency, fluency, and how well they maintained engagement throughout the interview. Comment on their vocal presence and presentation style.
+  - 40% on content: Address their technical knowledge, problem-solving approach, depth of answers, and relevance to the questions asked.
+  Provide specific observations from across all their responses, highlighting strengths and areas for improvement.
+  Then say something like:
   "All questions have been asked and the interview is over."
 
 Use the following job-related context if it is relevant:
@@ -116,13 +165,17 @@ Current question the candidate just answered:
 Candidate's answer:
 {user_answer}
 
+Audio delivery metrics (use prominently in your feedback):
+{audio_metrics}
+
 Next question (if any):
 {next_question}
 
 Is this the last question? {is_last_question}
 
-Now produce your response in plain text, following the rules above.
+Now produce your response in plain text, strictly following all the rules above.
 """
+
 
 
 
@@ -131,9 +184,11 @@ def generate_interviewer_reply(
     chat_hist: List[Dict[str, str]],
     current_question: str,
     next_question: Optional[str],
+    metrics: Optional[Dict[str, Any]] = None,
 ) -> str:
     """Use LangChain + Groq + Firestore-backed RAG to review the answer and ask next question / end interview."""
     history_str = format_history(chat_hist)
+    metrics_str = format_metrics(metrics)
 
     # Build RAG context from current question + answer
     context_text = ""
@@ -147,6 +202,7 @@ def generate_interviewer_reply(
         history=history_str,
         current_question=current_question,
         user_answer=user_answer,
+        audio_metrics=metrics_str,
         next_question=next_question or "",
         is_last_question="yes" if next_question is None else "no",
     )
@@ -163,7 +219,11 @@ def generate_interviewer_reply(
     raise RuntimeError(f"All Groq LLM keys failed. Last error: {last_error}")
 
 
-def generate_final_score(chat_hist: List[Dict[str, str]], questions: List[str]) -> Dict[str, Any]:
+def generate_final_score(
+    chat_hist: List[Dict[str, str]],
+    questions: List[str],
+    metrics_by_question: Optional[Dict[int, Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
     """
     Use LLM to evaluate the entire interview and generate a final score (0-100) with justification.
     
@@ -177,6 +237,13 @@ def generate_final_score(chat_hist: List[Dict[str, str]], questions: List[str]) 
     history_str = format_history(chat_hist)
     questions_str = "\n".join(f"{i+1}. {q}" for i, q in enumerate(questions))
     
+    metrics_lines = []
+    if metrics_by_question:
+        for idx in sorted(metrics_by_question.keys()):
+            m = format_metrics(metrics_by_question.get(idx))
+            metrics_lines.append(f"Q{idx+1}: {m}")
+    metrics_block = "\n".join(metrics_lines) if metrics_lines else "No audio metrics provided."
+
     scoring_prompt = f"""
 You are an expert interviewer evaluating a candidate's interview performance.
 
@@ -190,16 +257,22 @@ Below are the questions asked and the full conversation history:
 {history_str}
 </conversation>
 
-Based on the candidate's answers, evaluate their performance across these dimensions:
-- Technical knowledge and accuracy
-- Communication clarity and professionalism
-- Problem-solving approach
-- Depth of understanding
-- Relevance and completeness of answers
+Audio delivery metrics per question (weight these heavily in scoring):
+{metrics_block}
+
+Evaluate the candidate's performance with this weighting:
+- 60% weight: Delivery quality - communication clarity, speaking confidence, pacing, fluency, response timing, and overall presentation
+- 40% weight: Content quality - technical knowledge, problem-solving approach, depth of understanding, and answer completeness
+
+IMPORTANT INSTRUCTIONS:
+- Prioritize delivery metrics in your evaluation, as strong communication skills are critical for this role.
+- If some questions lack detailed audio metrics, focus your evaluation on the questions where metrics ARE available and the overall conversation quality.
+- DO NOT mention "lack of audio metrics" or "incomplete metrics" in your justification.
+- Use natural, conversational language - avoid technical metric terms.
 
 Provide:
 1. A numerical score from 0 to 100 (0=very poor, 100=excellent)
-2. A brief justification (2-4 sentences) explaining the score; be candid and bluntly honest while staying professional and specific.
+2. A detailed justification (5-7 sentences, 100-120 words) explaining the score. Be specific about both delivery quality and content quality. Be candid and bluntly honest while staying professional.
 
 Format your response EXACTLY as:
 SCORE: <number>

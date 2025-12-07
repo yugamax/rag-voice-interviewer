@@ -67,6 +67,18 @@ async def websocket_endpoint(websocket: WebSocket):
     # 3) Interview ID (can be provided by frontend or auto-generated)
     interview_id = websocket.query_params.get("interviewId") or str(uuid.uuid4())
 
+    # Get current attempt number for this interview
+    from firebase_client import db
+    try:
+        interview_doc = db.collection("interviews").document(interview_id).get()
+        current_attempt = 1
+        if interview_doc.exists:
+            data = interview_doc.to_dict() or {}
+            current_attempt = (data.get("attempt_count", 0) or 0) + 1
+    except Exception:
+        current_attempt = 1
+    print(f"[Interview] Starting attempt #{current_attempt} for interview {interview_id}")
+
     # Load interview questions
     questions = load_interview_questions(interview_id)
     if not questions:
@@ -89,7 +101,7 @@ async def websocket_endpoint(websocket: WebSocket):
     intro_text = (
         "Hello, I am your AI interviewer. "
         "We will proceed through the questions one by one.\n\n"
-        f"Question 1: {first_question}"
+        f"Your first question is: {first_question}"
     )
     intro_audio_base64 = tts_text_to_base64_wav(intro_text)
 
@@ -102,13 +114,40 @@ async def websocket_endpoint(websocket: WebSocket):
     await websocket.send_text(json.dumps(initial_payload))
     chat_hist.append({"role": "assistant", "content": intro_text})
 
+    metrics_buffer = {}
+    metrics_by_question = {}
+
     try:
         while True:
             try:
-                audio_bytes = await websocket.receive_bytes()
+                message = await websocket.receive()
             except Exception as e:
-                print(f"[WS] Error receiving bytes: {e}")
+                print(f"[WS] Error receiving message: {e}")
                 break
+
+            if message.get("type") == "websocket.disconnect":
+                break
+
+            text_data = message.get("text")
+            bytes_data = message.get("bytes")
+
+            if text_data is not None:
+                try:
+                    payload = json.loads(text_data)
+                except Exception:
+                    continue
+
+                if payload.get("type") == "metrics":
+                    q_idx = int(payload.get("questionIndex", current_q_index))
+                    received_metrics = payload.get("metrics", {})
+                    metrics_buffer[q_idx] = received_metrics
+                    print(f"[Metrics] Received metrics for Q{q_idx}: {received_metrics}")
+                continue
+
+            if bytes_data is None:
+                continue
+
+            audio_bytes = bytes_data
 
             # Persist to a temp file for the STT client (some clients accept file path)
             with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as temp_audio:
@@ -143,9 +182,31 @@ async def websocket_endpoint(websocket: WebSocket):
                     pass
                 continue
 
+            # Prepare metrics (frontend-sent only; filler counts removed)
+            frontend_metrics = metrics_buffer.pop(current_q_index, {})
+            merged_metrics = {**frontend_metrics}
+            metrics_by_question[current_q_index] = merged_metrics
+            print(f"[Metrics] Using metrics for Q{current_q_index}: {merged_metrics}")
+
             # Append to chat history and persist
             chat_hist.append({"role": "user", "content": user_text})
             current_question_text = questions[current_q_index]
+
+            # Send transcript + metrics back to client
+            try:
+                await websocket.send_text(
+                    json.dumps(
+                        {
+                            "type": "transcript",
+                            "interviewId": interview_id,
+                            "questionIndex": current_q_index,
+                            "transcript": user_text,
+                            "metrics": merged_metrics,
+                        }
+                    )
+                )
+            except Exception:
+                pass
 
             save_user_response(
                 interview_id=interview_id,
@@ -153,6 +214,8 @@ async def websocket_endpoint(websocket: WebSocket):
                 question_index=current_q_index,
                 question_text=current_question_text,
                 answer_text=user_text,
+                metrics=merged_metrics,
+                attempt_number=current_attempt,
             )
 
             # Determine next question (if any)
@@ -162,13 +225,13 @@ async def websocket_endpoint(websocket: WebSocket):
                 next_question = None
 
             try:
-                # print(f"[WS] Got transcript for user {user_id}: {user_text}")
                 t0_llm = time.monotonic()
                 res = generate_interviewer_reply(
                     user_answer=user_text,
                     chat_hist=chat_hist,
                     current_question=current_question_text,
                     next_question=next_question,
+                    metrics=merged_metrics,
                 )
                 t1_llm = time.monotonic()
                 print(f"[WS] LLM produced response (took {t1_llm - t0_llm:.2f}s): {res[:200]}")
@@ -198,23 +261,17 @@ async def websocket_endpoint(websocket: WebSocket):
                 if next_question is None:
                     try:
                         print(f"[Interview] Generating final score for interview {interview_id}")
-                        score_result = generate_final_score(chat_hist, questions)
+                        score_result = generate_final_score(chat_hist, questions, metrics_by_question)
                         score = score_result["score"]
                         justification = score_result["justification"]
 
-                        # print(f"[Interview] Final score: {score}/100")
-                        # print(f"[Interview] Justification: {justification}")
-
-                        # Save to database
                         attempt_count = save_interview_score(
                             interview_id=interview_id,
                             user_id=user_id,
                             score=score,
                             justification=justification,
                         )
-                        # print(f"[Interview] Score saved to database")
 
-                        # Send final score to client before closing
                         final_payload = {
                             "type": "final_score",
                             "score": score,
@@ -245,6 +302,6 @@ async def websocket_endpoint(websocket: WebSocket):
         print("WebSocket got disconnected")
 
 
-# if __name__ == "__main__":
-#     port = int(os.environ.get("PORT", 7860))
-#     uvicorn.run("main:app", host="127.0.0.1", port=port)
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 7860))
+    uvicorn.run("main:app", host="127.0.0.1", port=port)

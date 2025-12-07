@@ -1,7 +1,7 @@
 import uuid
 import json
 import os
-from typing import List
+from typing import List, Optional, Dict, Any
 
 import firebase_admin
 from firebase_admin import credentials, firestore
@@ -99,6 +99,8 @@ def save_user_response(
     question_index: int,
     question_text: str,
     answer_text: str,
+    metrics: Optional[Dict[str, Any]] = None,
+    attempt_number: int = 1,
 ):
     """
     Store every user response in Firestore under:
@@ -119,6 +121,8 @@ def save_user_response(
                 "questionIndex": question_index,
                 "question": question_text,
                 "answer": answer_text,
+                "metrics": metrics or {},
+                "attemptNumber": attempt_number,
                 "createdAt": server_ts,
             }
         )
