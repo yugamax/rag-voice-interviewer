@@ -64,6 +64,9 @@ async def websocket_endpoint(websocket: WebSocket):
         print(f"[WS] Invalid idToken: {e}")
         return
 
+    # Optional: sessionId written by the frontend into users/{uid}/sessions/{sessionId}
+    session_id = websocket.query_params.get("sessionId")
+
     # 3) Interview ID (can be provided by frontend or auto-generated)
     interview_id = websocket.query_params.get("interviewId") or str(uuid.uuid4())
 
@@ -277,7 +280,13 @@ async def websocket_endpoint(websocket: WebSocket):
                 if next_question is None:
                     try:
                         print(f"[Interview] Generating final score for interview {interview_id}")
-                        score_result = generate_final_score(chat_hist, questions, metrics_by_question)
+                        score_result = generate_final_score(
+                            chat_hist,
+                            questions,
+                            metrics_by_question,
+                            user_id=user_id,
+                            session_id=session_id,
+                        )
                         score = score_result["score"]
                         justification = score_result["justification"]
 

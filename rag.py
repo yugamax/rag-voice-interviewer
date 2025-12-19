@@ -12,7 +12,8 @@ from config import (
     INTERVIEW_CONTEXT_COLLECTION,
     NON_EMPTY_GROQ_KEYS,
 )
-from firebase_client import db
+from firebase_client import db, get_session_with_events
+import datetime
 
 # ---- Embeddings + Vector store ----
 
@@ -271,6 +272,8 @@ def generate_final_score(
     chat_hist: List[Dict[str, str]],
     questions: List[str],
     metrics_by_question: Optional[Dict[int, Dict[str, Any]]] = None,
+    user_id: Optional[str] = None,
+    session_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Use LLM to evaluate the entire interview and generate a final score (0-100) with justification.
@@ -291,6 +294,32 @@ def generate_final_score(
             m = format_metrics(metrics_by_question.get(idx))
             metrics_lines.append(f"Q{idx+1}: {m}")
     metrics_block = "\n".join(metrics_lines) if metrics_lines else "No audio metrics provided."
+    # If a user/session pair is provided, try to fetch camera detection events
+    camera_block = "No camera detection events available."
+    if user_id and session_id:
+        try:
+            se = get_session_with_events(user_id, session_id)
+            sess = se.get("session")
+            evs = se.get("events", []) or []
+            if evs:
+                lines = []
+                for e in evs:
+                    ts = e.get("timestamp")
+                    reason = e.get("reason") or e.get("type") or "(no reason)"
+                    if ts:
+                        try:
+                            iso = datetime.datetime.fromtimestamp(ts/1000.0).isoformat()
+                        except Exception:
+                            iso = str(ts)
+                        lines.append(f"{iso}: {reason}")
+                    else:
+                        lines.append(f"{reason}")
+                camera_block = "\n".join(lines)
+            else:
+                camera_block = "No camera detection events found for this session."
+        except Exception as e:
+            print(f"[RAG] Error fetching camera events: {e}")
+            camera_block = "Error fetching camera detection events."
 
     scoring_prompt = f"""
 You are an expert interviewer evaluating a candidate's interview performance.
@@ -307,6 +336,9 @@ Below are the questions asked and the full conversation history:
 
 Audio delivery metrics per question (weight these heavily in scoring):
 {metrics_block}
+
+Camera detections recorded for this candidate/session (if any):
+{camera_block}
 
 Evaluate the candidate's performance with this weighting:
 - 60% weight: Delivery quality - communication clarity, speaking confidence, pacing, fluency, response timing, and overall presentation

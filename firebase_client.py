@@ -170,3 +170,27 @@ def save_interview_score(
     except Exception as e:
         print(f"[Interview] Error saving score: {e}")
         return 1
+
+
+def get_session_with_events(user_id: str, session_id: str) -> Dict[str, Any]:
+    """
+    Fetch a user's session document and its `events` subcollection.
+
+    Returns a dict: {"session": <session_doc_or_None>, "events": [event_dicts...]}
+    Events are sorted by `timestamp` (ascending).
+    """
+    try:
+        session_ref = db.collection("users").document(user_id).collection("sessions").document(session_id)
+        session_doc = session_ref.get()
+        session = session_doc.to_dict() if session_doc.exists else None
+
+        events_ref = session_ref.collection("events")
+        events = [ (e.id, e.to_dict() or {}) for e in events_ref.stream() ]
+        # Extract dicts and sort by timestamp if present
+        events_only = [e for (_id, e) in events]
+        events_sorted = sorted(events_only, key=lambda x: x.get("timestamp", 0))
+
+        return {"session": session, "events": events_sorted}
+    except Exception as e:
+        print(f"[Firebase] Error fetching session/events for {user_id}/{session_id}: {e}")
+        return {"session": None, "events": []}
